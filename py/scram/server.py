@@ -63,12 +63,11 @@ def listen():
 			# stored key. If yes, authentication successful. 
 			# Otherwise, failed.
 			msg = connstream.recv(4096)
-			print(msg)
+			print(str(msg))
 
 			# TODO: Step SER.2.2. If successful, Compute Server 
 			# Proof using same method as client proof and send 
 			# to client.
-			pass
 		finally:
 			connstream.shutdown(socket.SHUT_RDWR)
 			connstream.close()
