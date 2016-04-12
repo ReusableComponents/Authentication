@@ -47,6 +47,9 @@ def listen():
 			# r=<nonce>.
 			# Load corresponding user information and respond by 
 			# sending iteration count and salt to user.
+			val = connstream.recv(4096)
+			print(val)
+			print(type(val))
 
 			# TODO: Step SER.2.1. When Client Proof received, compute client
 			# signature, XOR that with client proof and hash 
