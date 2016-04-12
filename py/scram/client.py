@@ -6,7 +6,8 @@ from sasl import SecurityLayerFactory
 import ssl
 import socket
 
-_ADDR = ("159.203.246.108", 10023)
+_ADDR_HOSTNAME = "159.203.246.108"
+_ADDR_PORT = 10023
 
 # TODO: Authenticate should have SCRAM as possible input. SCRAM isn't only auth
 # mechanism. Therefore, the application should be decoupled from the mechanism.
@@ -30,9 +31,13 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 		channel_bind_type: String. The channel binding type to apply.
 		'''
 	context = SecurityLayerFactory.get("ssl")
-	context.verify_mode = ssl.CERT_REQUIRED
-	context.check_hostname = True
+	# TODO: Change verify_mode to CERT_REQUIRED and create local CA or
+	# something. The smart system will need to check certificates and 
+	# the controller will need to act as the CA.
+	context.verify_mode = ssl.CERT_NONE
+	#context.check_hostname = True
 	context.load_verify_locations("/etc/ssl/certs/ca-certificates.crt")
+	context.load_cert_chain("/etc/ssl/certs/cert.pem")
 	#context.load_verify_locations("/home/hayden/projects/github/Authentication/py/scram/cert.pem")
 	# TODO: Hardcoded to follow SSLContext object interface.
 	# Review and refine interface if necessary.
@@ -49,6 +54,8 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 
 	# TODO: Step CLI.1. Generate authentication request to server. Request
 	# MUST be of form...
+
+
 	# n=<support_cb_flag>,m=<optional_field>,n=<username>,r=<nonce>
 
 	# TODO: Step CLI.2. When response received, calculate client proof and
@@ -59,3 +66,6 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 	# compare with known server key. If 
 
 	return cert
+
+if __name__=="__main__":
+	authenticate("hayden", "testpassword", _ADDR_HOSTNAME, _ADDR_PORT)
