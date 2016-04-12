@@ -50,7 +50,6 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 				)
 	# TODO: Make sure port is dynamically assigned, not hardcoded.
 	result = conn.connect((server_hostname, server_port))
-	print(result) # DEBUG statement
 
 	# TODO: HIGH Implement with channel bindings
 
