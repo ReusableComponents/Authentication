@@ -10,12 +10,13 @@
 
 # Convert string to byte array for send over port
 def string_to_bytes(string):
-	ba = bytearray()
-	ba.extend(map(ord, string))
-	return ba
+	#ba = bytearray()
+	#string = string.encode("utf-8").strip()
+	#ba.extend(map(ord, string))
+	return string.encode("utf-8").strip()
 
 def bytes_to_string(byte_array, encoding="utf-8"):
-	return byte_array.decode(encoding)
+	return byte_array.decode(encoding).strip()
 ######################################################################
 #	SCRAM Formatting
 ######################################################################
