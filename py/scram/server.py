@@ -26,7 +26,10 @@ auth_db = { "hayden": { _SALT:"test_salt",
 
 def listen():
 	# Listen for initial client connect request
-	context = create_default_context(ssl.Purpose.CLIENT_AUTH)
+	context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+	# TODO: Make verification required, but use local CA.
+	context.verify_mode = ssl.CERT_NONE
+	context.load_cert_chain(certfile="/etc/ssl/certs/cert.pem")
 	bind_socket = socket.socket()
 	bind_socket.bind(_ADDR)
 	bind_socket.listen(5)
@@ -58,3 +61,6 @@ def listen():
 		finally:
 			connstream.shutdown(socket.SHUT_RDWR)
 			connstream.close()
+
+if __name__=='__main__':
+	listen()
