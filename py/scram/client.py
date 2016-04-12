@@ -5,6 +5,7 @@
 from sasl import SecurityLayerFactory
 import ssl
 import socket
+import codecs
 
 _ADDR_HOSTNAME = "159.203.246.108"
 _ADDR_PORT = 10023
@@ -30,6 +31,7 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 			should be applied. True = Yes, False = No.
 		channel_bind_type: String. The channel binding type to apply.
 		'''
+	success = False
 	context = SecurityLayerFactory.get("ssl")
 	# TODO: Change verify_mode to CERT_REQUIRED and create local CA or
 	# something. The smart system will need to check certificates and 
@@ -46,17 +48,20 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 				server_hostname=server_hostname
 				)
 	# TODO: Make sure port is dynamically assigned, not hardcoded.
-	conn.connect((server_hostname, server_port))
-
-	cert = conn.getpeercert()
+	result = conn.connect((server_hostname, server_port))
+	print(result) # DEBUG statement
 
 	# TODO: HIGH Implement with channel bindings
 
 	# TODO: Step CLI.1. Generate authentication request to server. Request
-	# MUST be of form...
-
-
+	# MUST be of form...	
 	# n=<support_cb_flag>,m=<optional_field>,n=<username>,r=<nonce>
+	req = string_to_bytes("n,,n=hayden,r=nonce")
+
+	# TODO: HIGH ensure all bytes are sent in accordance with python docs.
+	# send() returns the number of bytes sent, but may not match that 
+	# intended.
+	conn.send(req)
 
 	# TODO: Step CLI.2. When response received, calculate client proof and
 	# send to server for authentication.
@@ -65,7 +70,19 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 	# signature, XOR with server proof to recover server key and
 	# compare with known server key. If 
 
-	return cert
+	success = True
+	
+	return success
+
+#
+#	HELPER FUNCTIONS
+#
+
+# Convert string to byte array for send over port
+def string_to_bytes(string):
+	ba = bytearray()
+	ba.extend(map(ord, string))
+	return ba
 
 if __name__=="__main__":
 	authenticate("hayden", "testpassword", _ADDR_HOSTNAME, _ADDR_PORT)
