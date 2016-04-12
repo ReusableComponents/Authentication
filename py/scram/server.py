@@ -12,13 +12,15 @@ _ADDR = ("159.203.246.108", 10023)
 
 _SALT = "salt"
 _ITERATION_COUNT = "iteration_count" # minimum recommended for SCRAM
+_STORED_KEY = "stored_key"
+_SERVER_KEY = "server_key"
 _IT_CNT_MIN = 4096
 
 # TODO: Remove and implement actual authentication database
-auth_db = { "hayden": { _SALT:"", 
+auth_db = { "hayden": { _SALT:"test_salt", 
 			_ITERATION_COUNT:_IT_CNT_MIN,
-			_STORED_KEY:,
-			_SERVER_KEY:
+			_STORED_KEY:"stored",
+			_SERVER_KEY:"server"
 			}
 		}
 
@@ -38,9 +40,9 @@ def listen():
 		try:
 			# TODO: Step SER.1. Upon receive first client request,
 			# process fields...
-		        # n=<support_cb_flag>,m=<optional_field>,n=<username>,
+			# n=<support_cb_flag>,m=<optional_field>,n=<username>,
 			# r=<nonce>.
-		        # Load corresponding user information and respond by 
+			# Load corresponding user information and respond by 
 			# sending iteration count and salt to user.
 
 			# TODO: Step SER.2.1. When Client Proof received, compute client
@@ -52,6 +54,7 @@ def listen():
 			# TODO: Step SER.2.2. If successful, Compute Server 
 			# Proof using same method as client proof and send 
 			# to client.
+			pass
 		finally:
 			connstream.shutdown(socket.SHUT_RDWR)
 			connstream.close()
