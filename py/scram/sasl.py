@@ -35,3 +35,10 @@ class SecurityLayerFactory(object):
 		instance = sl(ssl.PROTOCOL_SSLv23)
 		return instance
 
+# TODO: Complete string prep. Initially, will avoid so as to save time for
+# school presentation.
+def string_prep(string, prep_type="sasl"):
+	'''Prep simple unicode username or password for internationalized
+	comparison''' 
+	pass
+

@@ -6,6 +6,12 @@ from sasl import SecurityLayerFactory
 import ssl
 import socket
 
+_ADDR = ("159.203.246.108", 10023)
+
+# TODO: Authenticate should have SCRAM as possible input. SCRAM isn't only auth
+# mechanism. Therefore, the application should be decoupled from the mechanism.
+# The authenticate function should be present at a higher level of abstraction
+# calling the scram type of authentication.
 def authenticate(authentication_user, password, server_hostname, server_port, authorization_users=None, hash_type="sha-1", channel_bind=True, channel_bind_type="tls-unique"):
 	'''Authenticate against SCRAM server.
 		authentication_user: String. The user authenticating against
@@ -38,5 +44,18 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 	conn.connect((server_hostname, server_port))
 
 	cert = conn.getpeercert()
+
+	# TODO: HIGH Implement with channel bindings
+
+	# TODO: Step CLI.1. Generate authentication request to server. Request
+	# MUST be of form...
+	# n=<support_cb_flag>,m=<optional_field>,n=<username>,r=<nonce>
+
+	# TODO: Step CLI.2. When response received, calculate client proof and
+	# send to server for authentication.
+
+	# TODO: Step CLI.3. If auth request successful, calculate server
+	# signature, XOR with server proof to recover server key and
+	# compare with known server key. If 
 
 	return cert
