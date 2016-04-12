@@ -92,12 +92,22 @@ def process_initial_client_response(message):
 
 # Parse the contents of the initial client response
 def parse_initial(message):
-	split_msg = message.split(',')
-	return tuple(split_msg)
+	crude_msg = message.split(',')
+	split_msg = list()
+	# Entries are of form 'n=val'. We're only interested
+	# in val. Eliminate attribute characters.
+	for entry in crude_msg:
+		field = entry.split('=')
+		split_msg.append(field[len(field) - 1])
+	print(split_msg)
+	# TODO: Reorder result seamlessly. This is ridiculous. Only
+	# for demonstration purposes.
+	tmp = [split_msg[2], split_msg[3], split_msg[0], split_msg[1]]
+	return tuple(tmp)
 
 def get_user_data(user_id):
 	# TODO: User_id shouldn't be username
-	return _AUTH_DB(user_id)
+	return _AUTH_DB[user_id]
 
 def first_server_challenge(salt, iteration_count, nonce):
 	msg=""
