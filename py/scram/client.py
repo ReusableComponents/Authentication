@@ -7,9 +7,13 @@ import helper
 import ssl
 import socket
 import codecs
+import hmac
 
 _ADDR_HOSTNAME = "159.203.246.108"
 _ADDR_PORT = 10023
+# TODO: Nonce shouldn't be global. Implement better later. for presentation.
+_GLOBAL_NONCE = ""
+_CLIENT_BARE = ""
 
 # TODO: Authenticate should have SCRAM as possible input. SCRAM isn't only auth
 # mechanism. Therefore, the application should be decoupled from the mechanism.
@@ -57,16 +61,20 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 	# MUST be of form...	
 	# n=<support_cb_flag>,m=<optional_field>,n=<username>,r=<nonce>
 	msg = initial_client_response("hayden", "secure_nonce")
+	_CLIENT_BARE = msg # Store for use in computation of AuthMessage
 
 	# TODO: HIGH ensure all bytes are sent in accordance with python docs.
 	# send() returns the number of bytes sent, but may not match that 
 	# intended.
 	conn.send(msg)
+	msg = conn.recv(4096)
+	print(msg)
+
+	msg = process_first_server_challenge(msg)
+	conn.send(msg)
 
 	# TODO: Step CLI.2. When response received, calculate client proof and
 	# send to server for authentication.
-	msg = conn.recv(4096)
-	print(msg)
 
 	# TODO: Step CLI.3. If auth request successful, calculate server
 	# signature, XOR with server proof to recover server key and
@@ -88,7 +96,80 @@ def initial_client_response(username, nonce, binding_flag="no_channel_binding", 
 	msg+= ','
 	msg+= 'n=' + username + ','
 	msg+= 'r=' + nonce
+
+	# TODO: Separation of concerns. This onyl for presentation.
+	_GLOBAL_NONCE = nonce
+
 	return helper.string_to_bytes(msg)
+
+def process_first_server_challenge(message):
+	msg = helper.bytes_to_string(message)
+	
+	# Parse message
+	nonce, salt, iteration_count = parse_first_challenge(msg)
+
+	# TODO: Retrieve normalized password
+	password = "test_password"
+	print("Password: " + password)
+
+	# Check nonce to ensure initial client val present
+	print("Client Nonce: " + _GLOBAL_NONCE)
+	print("Returned Server Nonce: " + nonce)
+	if _GLOBAL_NONCE not in nonce:
+		raise ValueError(("Possible Man-in-Middle. Nonce "
+					"mismatch detected."))
+	
+	# Calculate salted password
+	salted_pass = iterated_hash(password, salt, iteration_count)
+	print("Salted Password: " + salted_pass)
+
+	# Calculate client key
+	sha = hmac.new(salted_pass, digestmethod="sha1")
+	sha.update("Client Key")
+	client_key = sha.digest()
+	print("Client key: " + client_key)
+
+	# Calculate stored key
+	alone_sha_hash = hashlib.sha1()
+	alone_sha_hash.update(client_key)
+	stored_key = alone_sha_hash.digest()
+
+	# Calculate auth message
+	auth_message = _CLIENT_BASE + "," + msg # + Client final message without proof.
+					# For now just the first two to keep
+					# simple.
+
+	# Calculate client signature
+	signature_hash = hmac.new(stored_key, digestmethod="sha1")
+	signature_hash.update(auth_message)
+	client_signature = signature_hash.digest()
+
+	# Calculate client proof
+	client_proof = client_key ^ client_signature
+	print("Client Key (proof calc): " + client_key)
+	print("Client Signature (proof calc): " + client_signature)
+	print("Client Proof: " + client_proof)
+
+	# Format message to send to server
+	result = "c=biws,r=" + nonce + ".p=" + client_proof
+	return helper.string_to_bytes(result)
+
+def parse_first_challenge(message):
+	split_msg = helper.parse(message)
+	print(split_msg)
+	return tuple(split_msg)
+
+def iterated_hash(string, salt, i):
+	value = salt + "0001"
+	key = bytearray()
+	# TODO: Allow for different types of digests to be used.
+	sha = hmac.new(key, digestmethod="sha1")
+	result = None
+	for i in range(i):
+		sha.update(value)
+		result = sha.digest()
+		value = result
+	return result
 
 def get_binding_flag(name):
 	if name not in _BINDING_FLAGS:

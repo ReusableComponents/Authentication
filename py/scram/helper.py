@@ -19,3 +19,14 @@ def bytes_to_string(byte_array, encoding="utf-8"):
 ######################################################################
 #	SCRAM Formatting
 ######################################################################
+
+# TODO: Implement messageformat
+def parse(message, messageformat="scram"):
+	crude_msg = message.split(',')
+	split_msg = list()
+	# Entries are of form 'n=val'. We're only interested
+	# in val. Eliminate attribute characters.
+	for entry in crude_msg:
+		field = entry.split('=')
+		split_msg.append(field[len(field) - 1])
+	return split_msg

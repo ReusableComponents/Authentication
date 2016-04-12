@@ -62,6 +62,8 @@ def listen():
 			# client_key. After, check that result matches 
 			# stored key. If yes, authentication successful. 
 			# Otherwise, failed.
+			msg = connstream.recv(4096)
+			print(msg)
 
 			# TODO: Step SER.2.2. If successful, Compute Server 
 			# Proof using same method as client proof and send 
@@ -92,16 +94,9 @@ def process_initial_client_response(message):
 
 # Parse the contents of the initial client response
 def parse_initial(message):
-	crude_msg = message.split(',')
-	split_msg = list()
-	# Entries are of form 'n=val'. We're only interested
-	# in val. Eliminate attribute characters.
-	for entry in crude_msg:
-		field = entry.split('=')
-		split_msg.append(field[len(field) - 1])
-	print(split_msg)
-	# TODO: Reorder result seamlessly. This is ridiculous. Only
-	# for demonstration purposes.
+	split_msg = helper.parse(message)
+	# TODO: More effective manner of reordering. This is unacceptable.
+	# Only for presentation purposes 
 	tmp = [split_msg[2], split_msg[3], split_msg[0], split_msg[1]]
 	return tuple(tmp)
 
