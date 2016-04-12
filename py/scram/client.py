@@ -8,6 +8,7 @@ import ssl
 import socket
 import codecs
 import hmac
+import hashlib
 
 _ADDR_HOSTNAME = "159.203.246.108"
 _ADDR_PORT = 10023
@@ -99,7 +100,6 @@ def initial_client_response(username, nonce, binding_flag="no_channel_binding", 
 
 	# TODO: Separation of concerns. This onyl for presentation.
 	_GLOBAL_NONCE = nonce
-
 	return helper.string_to_bytes(msg)
 
 def process_first_server_challenge(message):
@@ -109,8 +109,8 @@ def process_first_server_challenge(message):
 	nonce, salt, iteration_count = parse_first_challenge(msg)
 
 	# TODO: Retrieve normalized password
-	password = "test_password"
-	print("Password: " + password)
+	password = helper.string_to_bytes("test_password")
+	print("Password: " + helper.bytes_to_string(password))
 
 	# Check nonce to ensure initial client val present
 	print("Client Nonce: " + _GLOBAL_NONCE)
@@ -121,13 +121,11 @@ def process_first_server_challenge(message):
 	
 	# Calculate salted password
 	salted_pass = iterated_hash(password, salt, iteration_count)
-	print("Salted Password: " + salted_pass)
 
 	# Calculate client key
-	sha = hmac.new(salted_pass, digestmethod="sha1")
-	sha.update("Client Key")
+	sha = hmac.new(salted_pass, digestmod="sha1")
+	sha.update("Client Key".encode("utf-8").strip())
 	client_key = sha.digest()
-	print("Client key: " + client_key)
 
 	# Calculate stored key
 	alone_sha_hash = hashlib.sha1()
@@ -135,23 +133,22 @@ def process_first_server_challenge(message):
 	stored_key = alone_sha_hash.digest()
 
 	# Calculate auth message
-	auth_message = _CLIENT_BASE + "," + msg # + Client final message without proof.
+	auth_message = helper.string_to_bytes(_CLIENT_BARE + "," + msg) # + Client final message without proof.
 					# For now just the first two to keep
 					# simple.
 
 	# Calculate client signature
-	signature_hash = hmac.new(stored_key, digestmethod="sha1")
+	signature_hash = hmac.new(stored_key, digestmod="sha1")
 	signature_hash.update(auth_message)
 	client_signature = signature_hash.digest()
 
 	# Calculate client proof
-	client_proof = client_key ^ client_signature
-	print("Client Key (proof calc): " + client_key)
-	print("Client Signature (proof calc): " + client_signature)
-	print("Client Proof: " + client_proof)
+	client_proof = list()
+	for i in range(len(client_key)):
+		client_proof.append(client_key[i] ^ client_signature[i])
 
 	# Format message to send to server
-	result = "c=biws,r=" + nonce + ".p=" + client_proof
+	result = "c=biws,r=" + str(nonce) + ",p=" + str(client_proof)
 	return helper.string_to_bytes(result)
 
 def parse_first_challenge(message):
@@ -160,12 +157,12 @@ def parse_first_challenge(message):
 	return tuple(split_msg)
 
 def iterated_hash(string, salt, i):
-	value = salt + "0001"
+	value = helper.string_to_bytes(salt + "0001")
 	key = bytearray()
 	# TODO: Allow for different types of digests to be used.
-	sha = hmac.new(key, digestmethod="sha1")
+	sha = hmac.new(key, digestmod="sha1")
 	result = None
-	for i in range(i):
+	for i in range(int(i)):
 		sha.update(value)
 		result = sha.digest()
 		value = result
