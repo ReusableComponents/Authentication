@@ -3,6 +3,7 @@
 #	@author: Hayden McParlane
 #	@creation-date: 4.9.2016
 from sasl import SecurityLayerFactory
+import helper
 import ssl
 import socket
 import codecs
@@ -56,15 +57,17 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 	# TODO: Step CLI.1. Generate authentication request to server. Request
 	# MUST be of form...	
 	# n=<support_cb_flag>,m=<optional_field>,n=<username>,r=<nonce>
-	req = string_to_bytes("n,,n=hayden,r=nonce")
+	msg = initial_client_response("hayden", "secure_nonce")
 
 	# TODO: HIGH ensure all bytes are sent in accordance with python docs.
 	# send() returns the number of bytes sent, but may not match that 
 	# intended.
-	conn.send(req)
+	conn.send(msg)
 
 	# TODO: Step CLI.2. When response received, calculate client proof and
 	# send to server for authentication.
+	msg = conn.recv(4096)
+	print(msg)
 
 	# TODO: Step CLI.3. If auth request successful, calculate server
 	# signature, XOR with server proof to recover server key and
@@ -74,15 +77,28 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 	
 	return success
 
-#
-#	HELPER FUNCTIONS
-#
+# Create the initial client response message to begin auth process
+#	binding_flag: String. Represents desired channel binding type.
+#	username: String. User's username.
+#	nonce: String. Securely and randomly generated string of characters.
+# TODO:	Implement options -> options: TBD
+def initial_client_response(username, nonce, binding_flag="no_channel_binding", options=None):
+	msg = ""
+	msg+= get_binding_flag(binding_flag)
+	msg+= ','
+	msg+= ','
+	msg+= 'n=' + username + ','
+	msg+= 'r=' + nonce
+	return helper.string_to_bytes(msg)
 
-# Convert string to byte array for send over port
-def string_to_bytes(string):
-	ba = bytearray()
-	ba.extend(map(ord, string))
-	return ba
+def get_binding_flag(name):
+	if name not in _BINDING_FLAGS:
+		# TODO
+		pass
+	else:
+		return _BINDING_FLAGS[name]
+
+_BINDING_FLAGS = { "no_channel_binding": "n" }
 
 if __name__=="__main__":
 	authenticate("hayden", "testpassword", _ADDR_HOSTNAME, _ADDR_PORT)
