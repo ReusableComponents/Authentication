@@ -4,6 +4,7 @@
 #	@creation-date: 4.9.2016
 from sasl import SecurityLayerFactory
 import helper
+from helper import *
 import ssl
 import socket
 import codecs
@@ -13,8 +14,23 @@ import hashlib
 _ADDR_HOSTNAME = "159.203.246.108"
 _ADDR_PORT = 10023
 # TODO: Nonce shouldn't be global. Implement better later. for presentation.
-_GLOBAL_NONCE = ""
-_CLIENT_BARE = ""
+_STATE = dict()
+_CLIENT_NONCE = "client_nonce"
+
+# State manipulation functions
+def client_nonce(string=None):
+	if string is None:
+		# Assign to nonce
+		_STATE[_CLIENT_NONCE] = string
+	else:
+		# Return nonce value
+		return _STATE[_CLIENT_NONCE]
+
+def main():
+	client = SASLClient("scram", "ssl")
+	client.connect(_ADDR_HOSTNAME, _ADDR_PORT)
+	client.authenticate("hayden", "password")
+
 
 # TODO: Authenticate should have SCRAM as possible input. SCRAM isn't only auth
 # mechanism. Therefore, the application should be decoupled from the mechanism.
@@ -46,7 +62,6 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 	#context.check_hostname = True
 	context.load_verify_locations("/etc/ssl/certs/ca-certificates.crt")
 	context.load_cert_chain("/etc/ssl/certs/cert.pem")
-	#context.load_verify_locations("/home/hayden/projects/github/Authentication/py/scram/cert.pem")
 	# TODO: Hardcoded to follow SSLContext object interface.
 	# Review and refine interface if necessary.
 	conn = context.wrap_socket(
@@ -61,7 +76,9 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 	# TODO: Step CLI.1. Generate authentication request to server. Request
 	# MUST be of form...	
 	# n=<support_cb_flag>,m=<optional_field>,n=<username>,r=<nonce>
-	msg = initial_client_response("hayden", "secure_nonce")
+	username = "hayden"
+	client_nonce("clientnonce!!")
+	msg = initial_client_response(username, _STATE[_CLIENT_NONCE])
 	_CLIENT_BARE = msg # Store for use in computation of AuthMessage
 
 	# TODO: HIGH ensure all bytes are sent in accordance with python docs.
@@ -91,15 +108,9 @@ def authenticate(authentication_user, password, server_hostname, server_port, au
 #	nonce: String. Securely and randomly generated string of characters.
 # TODO:	Implement options -> options: TBD
 def initial_client_response(username, nonce, binding_flag="no_channel_binding", options=None):
-	msg = ""
-	msg+= get_binding_flag(binding_flag)
-	msg+= ','
-	msg+= ','
-	msg+= 'n=' + username + ','
-	msg+= 'r=' + nonce
+	",".join(binding_flag, ',', 'n=' + username, 'r=' + nonce)
 
 	# TODO: Separation of concerns. This onyl for presentation.
-	_GLOBAL_NONCE = nonce
 	return helper.string_to_bytes(msg)
 
 def process_first_server_challenge(message):
@@ -176,6 +187,40 @@ def get_binding_flag(name):
 		return _BINDING_FLAGS[name]
 
 _BINDING_FLAGS = { "no_channel_binding": "n" }
+
+class SCRAMClient(ClientState):
+
+	# Authenticate against a SCRAMServer
+	def authenticate(self, username, password):
+		pass
+			
+	def link(self, hostname, port):
+		pass
+
+class ClientState(Client):
+	def __init__(self):
+		super(self, Client).__init__()
+		self.state = dict()
+
+	def add(self, key, value):
+		self.update(key, value)
+
+	def update(self, key, value):
+		self.state[key] = value
+
+	def remove(self, key):
+		del self.state[key]
+
+	def exists(self, key):
+		if key in self.state:
+			return True
+		else:
+			return False
+
+class Client(object):
+	def __init__(self):
+		
+	
 
 if __name__=="__main__":
 	authenticate("hayden", "testpassword", _ADDR_HOSTNAME, _ADDR_PORT)
