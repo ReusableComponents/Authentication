@@ -8,8 +8,14 @@ import hashlib
 import hmac
 import helper
 from helper import StateHolder as StateHolder
+from helper import Authenticator
+from helper import AuthAdapter
+from collections import OrderedDict
 
 class MechanismInterface(object):
+	def authenticate(self, security_layer, user, password, channel_binding=False, options=None):
+		raise NotImplementedError()
+	
 	def supports_channel_binding(self):
 		raise NotImplementedError()
 
@@ -22,97 +28,122 @@ class MechanismType(object):
 		return self.mechanism_type
 
 class ClientFirst(MechanismType):
-	def __init__(self):
-		print(_CLIENT_FIRST)
-		super().__init__(_CLIENT_FIRST)
-
-	def authenticate(self, security_layer, user, password, channel_binding=False, options=None):
-		raise NotImplementedError()
+	def __init__(self):		
+		super().__init__(_CLIENT_FIRST)	
 
 	def _format(self, data):
 		raise NotImplementedError()
-
+	
+class ClientFirstClient(ClientFirst):
+	def __init__(self):
+		ClientFirst.__init__(self)
+			
 	def _initial(self):
-		raise NotImplementedError()
+		raise NotImplementedError()	
 
-class SCRAM(MechanismInterface, ClientFirst, StateHolder):
+class ClientFirstServer(ClientFirst):
+	def __init__(self):
+		ClientFirst.__init__(self)
+				
+class SCRAMClient(MechanismInterface, ClientFirstClient, StateHolder):
 	_channel_bind = "cbind"
-	_client_bare = "client_bare"
-	_client_nonce = "client_nonce"
-	_client_key = "client_key"
-	_csig = "client_sig"
-	_ssig = "server_sig"
-	_stored_key = "stored_key"
-	_server_key = "server_key"
-	_salted_pass = "spass"
-	_auth_msg = "auth_msg"
+	_client_bare = "clientbare"
+	_client_nonce = "clientnonce"
+	_client_key = "clientkey"
+	_csig = "clientsig"
+	_ssig = "serversig"
+	_stored_key = "storedkey"
+	_server_key = "serverkey"
+	_salted_pass = "spass"	
+	_auth_msg = "authmsg"
 	_attr_nonce = "r"
 	_attr_salt = "s"
-	_attr_iterc = "i", 
+	_attr_iterc = "i"
 	_attr_bind="c"
 	_attr_proof="p"
+	_attr_uid="n"
 	_bytes = 4096
+	_enc = "utf-8"
 	_hashes = { "sha1":hashlib.sha1 }
+	
+	def __init__(self):
+		MechanismInterface.__init__(self)
+		ClientFirstClient.__init__(self)
+		StateHolder.__init__(self)
+		
+	def _validate_nonce(self, nonce):
+		if not self.get(self._client_nonce) in nonce:
+				raise ValueError()			
 
 	def authenticate(self, security_layer, user, password, 
 		channel_binding=False, options=None):
-		with security_layer as conn:
+		with security_layer as conn:			
 			# . Sends initial response of form <channel_binding_flag>,
 			# <optionals>,n=<user_id>,r=<secure_nonce>
-			nonce = self._nonce()
-			r1 = self._initial(user, nonce)
-			self.add(_client_nonce, nonce)
-			self.add(_client_bare, r1)
-			conn.send(r1)
-			challenge = conn.recv(_bytes)
+			auth = AuthenticationType()
+			adapter = AuthAdapter()
+			adapter.split_on(',')
+			# TODO: Finish adapter such that can be configured to flexably
+			# parse messages received from net. accepted formats should
+			# stack and not replace each other. An accepted format means
+			# a message received with fields on that form will be accepted
+			# and parsed by the adapter.
+			adapter.accept_format(adapter.STANDALONE)
+			adapter.accept_format(adapter.KEY_VALUE, '=')			
+			
+			client_nonce = "securenonce"
+			client_bare = self._initial(user, client_nonce)						
+			helper.send_to_bytes(conn, client_bare)
+			challenge = helper.receive_to_string(conn)
+			print(challenge) # TODO: DEBUG STATEMENT
 
 			# . Validate nonce
-			if not self.get(_client_nonce) in challenge:
-				raise ValueError()
+			self._validate_nonce(challenge)
 
 			data = self._parse(challenge)
 			# . Compute client proof
-			
+		
 			# . TODO: Normalize password
-			spass = self._salt(password, data[_attr_salt], 
-					data[_attr_iterc])
+			spass = self._salt(password, data[self._attr_salt], 
+							data[self._attr_iterc])
 			client_key = self._hmac(spass, "Client Key")
 			stored_key = self._hash(client_key)
 
-			client_bare = self.get(_client_bare)
-			client_final = {_attr_bind:"biws", # TODO: Imp bind
-					_attr_nonce:data[_attr_nonce]}
+			client_bare = self.get(self._client_bare)
+			
+			client_final = OrderedDict()				
+			client_final[self._attr_bind] = "biws" # TODO: Imp bind				
+			client_final[self._attr_nonce] = data[self._attr_nonce]							
 
 			auth_msg = self._join( [client_bare, challenge, 
-						self._join(client_final)] )
+										self._join(client_final)] )
 			client_signature = self._hmac(stored_key, auth_msg)
-
-			client_proof = list()
-			for i in range(len(client_key) - 1):
-				client_proof.append(
-					client_key[i] ^ client_signature[i] 
-				)
+			client_proof = helper.xor_bytes(client_key, client_signature)			
 			print(client_proof)
 
-			client_final[_attr_proof] = client_proof
-			
+			client_final[self._attr_proof] = client_proof
+		
 			# . Send Challenge 1 response
 			r2 = self._format(client_final)
-			conn.send(r2)
+			helper.send_to_bytes(conn, r2)
 
-			answer = conn.recv(_bytes)
+			answer = helper.receive_to_string(conn)
 			# . Validate server
-
+			print(answer)
 	
 	def _initial(self, user, nonce, channel_binding=False):
-		data = { "n":user, "r":nonce }
-		return self._to_bytes("n,," + self._format(data))
+		data = OrderedDict()
+		data[self._attr_uid] = user
+		data[self._attr_nonce] = nonce
+		tmp = "n,," + self._format(data)
+		print(tmp) # TODO: REMOVE - THIS IS FOR DEBUG
+		return "n,," + self._format(data)
 
 	# TODO: Implement specifiable formatting later
 	def _format(self, data, encoding="utf-8"):
-		string = []
-		for attr, value in data.items():
-			string.append(attr + "=" + value)
+		string = []		
+		for attr, value in data.items():			
+			string.append(attr + '=' + value)
 		return self._join(string)
 
 	def _join(self, lst):
@@ -120,44 +151,27 @@ class SCRAM(MechanismInterface, ClientFirst, StateHolder):
 
 	def _parse(self, msg):
 		msg = msg.split(",")
-		data = dict()
+		data = OrderedDict()
 		for pair in msg:
 			tmp = pair.split("=")
 			data[tmp[0]] = tmp[1]
 		return data
 
-	def _nonce(self):
-		return self._to_bytes(nonce())
-
-	def _to_bytes(self, string):
-		return helper.string_to_bytes(string)
-
-	def _hmac(self, key, string, alg="sha1"):
-		h = hmac.new(key, digestmod=alg)
-		h.update(string)
-		return h.digest()
-
-	def _iterated_hash(string, salt, i):
-		value = salt + self._to_bytes("0001")
+	def _iterated_hash(self, string, salt, i, alg="sha1"):
+		value = self._to_bytes(salt + "0001")
 		key = bytearray()
 		# TODO: Allow for different types of digests to be used.
-		sha = hmac.new(key, digestmod="sha1")
+		sha = hmac.new(key, digestmod=alg)
 		result = None
 		for i in range(int(i)):
 			sha.update(value)
 			result = sha.digest()
 			value = result
-		return result
-
-	def _hash(string, alg="sha1"):
-		hash_type = _hashes[alg]
-		h = hash_type()
-		h.update(string)
-		return h.digest()
+		return self._to_string(result)
 	
 	def _salt(self, password, salt, iteration_count):
 		return self._iterated_hash(password, salt, iteration_count)
-
+	
 class SecurityLayerInterface(object):
 	def __enter__(self):
 		raise NotImplementedError()
@@ -192,14 +206,23 @@ class SSL(SecurityLayerInterface, StateHolder):
 	# SecurityLayerInterface used which means the mechanism code will
 	# break as soon as a new implementation is tried. Investigate.
 	def __enter__(self):
-		self._connect()
-		return self._get_connection()
+		try:
+			if self._is_lazy_connected():				
+				self._connect()
+				return self._get_connection()			
+			else:
+				raise IOError("A call to connect() needs to be made to use connection.")
+		except Exception as e:
+			print(e)
 	
 	def connect(self, dest_hostname, dest_port):
-		# Lazily evaluate connection
+		# Lazily connect
 		self._set_dest_hostname(dest_hostname)
 		self._set_dest_port(dest_port)
-		super().add(_CONNECTED, True)		
+		super().add(_CONNECTED, True)
+		
+	def _is_lazy_connected(self):
+		return super().get(_CONNECTED)		
 
 	def _connect(self):
 		dest_hostname = self._get_dest_hostname()
@@ -212,6 +235,7 @@ class SSL(SecurityLayerInterface, StateHolder):
 				context.wrap_socket( sock = socket.socket(socket.AF_INET),
 					    server_hostname=dest_hostname )  )
 			self._get_connection().connect((dest_hostname, dest_port))
+			
 
 	def _set_connection(self, conn):
 		self.conn = conn
@@ -239,6 +263,7 @@ class SSL(SecurityLayerInterface, StateHolder):
 
 	def __exit__(self, exc_type, exc_value, traceback):
 		try:
+			print("Closing client connection")
 			self._get_connection().close()
 		except Exception as e:
 			raise ValueError("Connection not active")			
@@ -265,8 +290,7 @@ class FactoryCollection(object):
 		self.update(factory, pairs)
 
 	@classmethod
-	def update(self, factory, pairs):
-		print(pairs)
+	def update(self, factory, pairs):		
 		for key, value in pairs.items():
 			FactoryCollection.factories[factory][key] = value
 
@@ -289,6 +313,8 @@ _sl = "security_layer"
 _strat = "sasl_strategy"
 _sl_entries = { "ssl":SSL }
 _m_entries = { "scram":SCRAM }
+_server = "server"
+_client = "client"
 class SASLFactory(FactoryCollection):
 
 	def __init__(self):
@@ -296,13 +322,23 @@ class SASLFactory(FactoryCollection):
 		self.add(_sl, _sl_entries)
 		self.add(_m, _m_entries)
 
-	def get(self, mechanism, security_layer):
+	# TODO: *** LEFTOFF *** 
+	# Implementing logic for factory to automap logic to client/server
+	# objects vs. including all logic in one mechanism object. This will
+	# Make things clearer. Mechanism host type should subclass mechanism.
+	# I.e, SCRAM --parent--> SCRAMClient, SCRAMServer
+	def get(self, mechanism, security_layer, server=False):
+		host_type = None
+		if server:
+			host_type = _server
+		else:
+			host_type = _client
+			
 		mech = self.get_mechanism(mechanism)
 		sl = self.get_security_layer(security_layer)
 		return ( mech, sl )
 
-	def get_mechanism(self, identity):
-		print(identity)
+	def get_mechanism(self, identity):		
 		if self.exists(_m, identity):
 			return FactoryCollection.get(_m, identity)
 		else:
@@ -326,11 +362,12 @@ class SASLFactory(FactoryCollection):
 # TODO: HIGH Refine connection mechanism because in current form, every
 # mechanism action will require a new call to connect upon completion.
 # See SSL().connect() and implementation below.
-class SASLClient(StateHolder):
-	def __init__(self, mechanism, security_layer, connect=None):
-		super().__init__()
-		mech, sl = _SASL_FACTORY.get(mechanism, security_layer)
-		self._setmech(mech())
+# TODO: Use factory to generate client/server specific objects
+class SASLHost(StateHolder):
+	def __init__(self, mechanism, security_layer, connect=None, server=False):
+		StateHolder.__init__(self)
+		mech, sl = _SASL_FACTORY.get(mechanism, security_layer, server)
+		self._setmech(mech(server))
 		self._setsl(sl())
 
 	def authenticate(self, user, password, channel_binding=False):
@@ -366,7 +403,7 @@ class SASLClient(StateHolder):
 
 # Generate a secure, pseudo-random nonce string
 def nonce():
-	return "secure_random_nonce!"
+	return "noncenoncenonce"
 
 # Factories
 _SASL_FACTORY = SASLFactory()
@@ -379,7 +416,9 @@ _CONNECTED = "connected"
 
 
 def main():
-	client = SASLClient("scram", "ssl")
+	client = SASLHost("scram", "ssl")
+	client.connect("159.203.246.108", 10023)
+	client.authenticate("hayden", "password")
 
 if __name__=="__main__":
 	main()
