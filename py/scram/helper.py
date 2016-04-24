@@ -4,6 +4,7 @@
 #	@creation-date: 4.12.2016
 ######################################################################
 from serial.serialutil import to_bytes
+import hashlib
 
 ######################################################################
 #	General
@@ -59,41 +60,88 @@ def parse(message, messageformat="scram"):
 	return split_msg
 
 class StateHolder(object):
+	_MREP = "replace"
+	_MAPP = "append"
+	_MEXT = "extend"
+	
 	def __init__(self):
-		self.state = dict()
+		self.setstate(dict())
+		self.modes = {self._MREP : self._replace,
+					  self._MAPP : self._append,
+					  self._MEXT : self._extend}
 
-	def add(self, key, value):
-		self.update(key, value)
+	def add(self, key, value, mode="replace"):		
+		self.update(key, value, mode)
 
-	def update(self, key, value):
-		self.state[key] = value
-
-	def get(self, key):
-		if self.exists(key):
-			return self.state[key]
+	def update(self, key, value, mode="replace"):
+		strategy = self.mode(mode)
+		strategy(key, value)
+	
+	def _append(self, key, value):
+		state = self.state()				
+		if not ( self.exists(key) or
+			 isinstance(state[key], list) or isinstance(state[key], dict) ):
+			self._replace(key, value)
 		else:
-			raise KeyError()
+			if isinstance(state[key], dict):
+				for k, v in value.iteritems():
+					state[k] = v
+			else:					
+				state[key].append(value)
+		
+	def _replace(self, key, value):
+		state = self.state()	
+		state[key] = value
+		
+	def _extend(self, key, value):
+		state = self.state()
+		if not ( self.exists(key) or
+			 isinstance(state[key], list) or isinstance(state[key], dict) ):
+			self._replace(key, value)
+		else:
+			state[key].append(value)
+		
+	def get(self, key):		
+		state = self.state()
+		if self.exists(key):
+			return state[key]
+		else:
+			return None
 
 	def remove(self, key):
-		del self.state[key]
+		state = self.state()
+		if not self.exists(key):
+			return
+		else:
+			del state[key]
 
-	def exists(self, key):
-		if key in self.state:
+	def exists(self, key):		
+		if key in self.state():
 			return True
 		else:
 			return False
+		
+	def mode(self, modestr):
+		return self.modes[modestr]
+	
+	def setstate(self, value):
+		self.st = value
+	
+	def state(self):
+		return self.st
 
 class TypeIndependent(object):
 	'''This class stores objects and provides functionality for 
 	accessing that same object in different forms (i.e, bytes can
 	be seamlessly accessed as strings, etc)'''
 	_STR = "string"
-	_BYT = "byte"
-	converters = { _STR:self._to_string, _BYT: self._to_bytes }
+	_BYT = "byte"		
 	
 	def __init__(self, value = None):
 		object.__init__(self)
 		self.set_value(value)
+		# TODO: Make this a class variable and not instance.
+		self.converters = { _STR: self._to_string, _BYT: self._to_bytes }
 		
 	def update(self, value):
 		self.set_value(value)
@@ -102,6 +150,7 @@ class TypeIndependent(object):
 		converted_value = self.perform_conversion(self._get_value(), _STR)
 		return to_string(bytes, encoding)
 	
+	@classmethod
 	def _to_string(self, value):
 		if isinstance(value, bytearray):		
 			result = helper.to_string(value)
@@ -113,14 +162,15 @@ class TypeIndependent(object):
 	def bytes(self):		
 		converted_value = self.perform_conversion(self._get_value(), _BYT)
 		return to_string(bytes, encoding)
-			
+	
+	@classmethod		
 	def _to_bytes(self, value):		
 		if isinstance(value, str):		
 			result = helper.to_bytes(value)
 		elif isinstance(value, bytearray):
 			return value
 		else:
-			raise NotImplementedError("Unimplemented type conversion encountered		
+			raise NotImplementedError("Unimplemented type conversion encountered")		
 	
 	def perform_conversion(self, value, type):
 		converter = self._get_converter(type)
@@ -131,7 +181,7 @@ class TypeIndependent(object):
 			print(e)
 		
 	def _get_converter(self, type):
-		conv = converters[type]
+		conv = self.converters[type]
 		
 	def _set_value(self, value):
 		self.value = value
@@ -191,11 +241,17 @@ def hmac(key, string, alg="sha1"):
 	h.update(string)
 	return to_string(h.digest())
 
-def hash(string, alg="sha1"):
+_hashes = { "sha1":hashlib.sha1 }
+
+def hash(string, alg="sha1", hexdigest=False):
 	hash_type = _hashes[alg]
 	h = hash_type()
-	h.update(string)
-	return to_string(h.digest())		
+	h.update(string)	
+	if hexdigest:
+		result = to_string(h.hexdigest())
+	else:
+		result = to_string(h.digest())
+	return result
 	
 class NetworkAdapter(object):
 	KEY_VALUE = 'kv'
@@ -251,9 +307,7 @@ class NetworkAdapter(object):
 	def get_format(self):
 		return self.form
 		
-class AuthAdapter(AdapterType):
+class AuthAdapter(NetworkAdapter):
 	
 	def __init__(self, val=None):
-		TypeIndependent.__init__(self, val)
-		
-	def 
+		super(NetworkAdapter, self).__init__()
