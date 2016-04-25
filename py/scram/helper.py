@@ -4,6 +4,7 @@
 #	@creation-date: 4.12.2016
 ######################################################################
 from serial.serialutil import to_bytes
+import copy
 import hashlib
 
 ######################################################################
@@ -43,6 +44,25 @@ def hash(string, alg="sha1"):
 	h = hash_type()
 	h.update(string)
 	return to_string(h.digest())
+
+def chunks(coll, n):
+    """Yield successive n-sized chunks from l."""
+    if len(coll) == 0:
+    	return [ coll ]
+    result = list()
+    size = len(coll)
+    dcopy = copy.deepcopy(coll)
+    print dcopy
+    for i in xrange(0, size, n):
+    	if isinstance(dcopy, list):
+        	result.append(dcopy[i:i+n])
+        elif isinstance(dcopy, dict):        	        	
+        	current = list()        	
+    		for key, value in dcopy.iteritems()[i:i+n]:
+    			current.append({ key:value })
+    			del dcopy[key]        			
+        	result.append(current)	        	 	        	
+	return result
 
 ######################################################################
 #	SCRAM Formatting
