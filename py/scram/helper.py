@@ -3,7 +3,6 @@
 #	@author: Hayden McParlane
 #	@creation-date: 4.12.2016
 ######################################################################
-from serial.serialutil import to_bytes
 import copy
 import hashlib
 
@@ -46,23 +45,62 @@ def hash(string, alg="sha1"):
 	return to_string(h.digest())
 
 def chunks(coll, n):
-    """Yield successive n-sized chunks from l."""
-    if len(coll) == 0:
-    	return [ coll ]
-    result = list()
-    size = len(coll)
-    dcopy = copy.deepcopy(coll)
-    print dcopy
-    for i in xrange(0, size, n):
-    	if isinstance(dcopy, list):
-        	result.append(dcopy[i:i+n])
-        elif isinstance(dcopy, dict):        	        	
-        	current = list()        	
-    		for key, value in dcopy.iteritems()[i:i+n]:
-    			current.append({ key:value })
-    			del dcopy[key]        			
-        	result.append(current)	        	 	        	
+	"""Yield successive n-sized chunks from l."""
+	if len(coll) == 0:
+		return [ coll ]
+	result = list()
+	size = len(coll)
+	dcopy = copy.deepcopy(coll)    
+	for i in xrange(0, size, n):
+		if isinstance(dcopy, list):
+			result.append(dcopy[i:i+n])
+		elif isinstance(dcopy, dict):
+			current = list()        	
+			for key, value in dcopy.items()[i:i+n]:
+				current.append({ key:value })
+				del dcopy[key]        			
+			result.append(current)	        	 	        	
 	return result
+
+def has_key(map, key):
+	if key in map:
+		return True
+	else:
+		return False
+	
+def value(map, key):
+	if not has_key(map, key):
+		return None
+	else:
+		return map[key]
+
+# TODO: Modify so that this is usable with keys when some should
+# be verbatim and others shouldn't be.	
+def getvalue(map, keys, verbatim=True):
+	map = copy.deepcopy(map)
+	if verbatim:
+		for key in keys:
+			if key not in map:
+				return None
+			map = map[key]
+	else:		
+		for key in keys:			
+			if isinstance(map, dict):
+				tmp = dict()				
+				try:
+					tmp['temp'] = [ subvalue for subkey, subvalue in map.items() if key.lower() 
+									in subkey.lower()].pop()					
+				except Exception as e:
+					# TODO: Refactor? This assumes failure of above indicates substring not present
+					print(e)
+					print("IN EXCEPT")
+					return None
+				map = tmp['temp']
+			elif isinstance(map, list):
+				map = map[key]
+			else:
+				raise TypeError()
+	return map
 
 ######################################################################
 #	SCRAM Formatting
@@ -104,7 +142,7 @@ class StateHolder(object):
 			self._replace(key, value)
 		else:
 			if isinstance(state[key], dict):
-				for k, v in value.iteritems():
+				for k, v in value.items():
 					state[k] = v
 			else:					
 				state[key].append(value)
@@ -266,11 +304,11 @@ _hashes = { "sha1":hashlib.sha1 }
 def hash(string, alg="sha1", hexdigest=False):
 	hash_type = _hashes[alg]
 	h = hash_type()
-	h.update(string)	
+	h.update(to_bytes(string))	
 	if hexdigest:
-		result = to_string(h.hexdigest())
+		result = h.hexdigest()
 	else:
-		result = to_string(h.digest())
+		result = h.digest()
 	return result
 	
 class NetworkAdapter(object):
